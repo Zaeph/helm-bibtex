@@ -783,6 +783,15 @@ Returns nil if no PDF is found."
   (or (bibtex-completion-find-pdf-in-field key-or-entry)
       (bibtex-completion-find-pdf-in-library key-or-entry find-additional)))
 
+;; TODO: Make it relative?
+
+(defcustom org-roam-refs-directory nil
+  "Default path to Org-roam refs files.
+This is useful if you want to keep your references in a different
+sub-directory."
+  :group 'bibtex-completion
+  :type 'string)
+
 (defun bibtex-completion-prepare-entry (entry &optional fields do-not-find-pdf)
   "Prepare ENTRY for display.
 ENTRY is an alist representing an entry as returned by
@@ -814,15 +823,19 @@ find a PDF file."
                       (cons (cons "=has-note=" bibtex-completion-notes-symbol) entry)
                     entry))
            ; Check for slip-box notes:
-           (entry (if (and (bound-and-true-p org-roam-directory)
-                           (f-directory? org-roam-directory)
-                           (member entry-key (mapcar #'car (org-roam--get-title-path-completions))))
-                      (cons (cons "=has-sb-note=" bibtex-completion-sb-notes-symbol) entry)
-                    entry))
-           ; Remove unwanted fields:
+           (entry (let ((dir (or org-roam-refs-directory
+                                 org-roam-directory)))
+                    (if (and dir
+                             (f-directory? dir)
+                             (f-file? (f-join dir
+                                              (concat entry-key
+                                                      ".org"))))
+                        (cons (cons "=has-sb-note=" bibtex-completion-sb-notes-symbol) entry)
+                      entry)))
+                                        ; Remove unwanted fields:
            (entry (if fields
-                       (--filter (member-ignore-case (car it) fields) entry)
-                     entry)))
+                      (--filter (member-ignore-case (car it) fields) entry)
+                    entry)))
       ;; Normalize case of entry type:
       (setcdr (assoc "=type=" entry) (downcase (cdr (assoc "=type=" entry))))
       ;; Remove duplicated fields:
@@ -1377,23 +1390,36 @@ line."
           (goto-char (point-max))
           (bibtex-completion-notes-mode 1))))))
 
+(defun org-roam--get-refs-entry-key-path-completions ()
+  (let ((alist (org-roam--get-title-path-completions))
+      (keys '()))
+  (dolist (cons alist)
+    (let ((path (cdr cons)))
+      (when (file-in-directory-p path org-roam-refs-directory)
+        (push (cons (file-name-base path) path) keys))))
+  keys))
+
 (defun bibtex-completion-edit-sb-notes (keys)
   "Open the slip-box notes associated with the selected entries using `find-file'."
-  (dolist (key keys)
-    (if (and org-roam-directory
-             (f-directory? org-roam-directory))
-        (if-let* ((sb-completion (org-roam--get-title-path-completions))
-                  (match (assoc key sb-completion))
-                  (path (cdr match)))
-            (find-file (cdr match))
-          (when (y-or-n-p (format "No slip-box note was found for %s.  Would you like to create one?" key))
-            (let* ((title key)
-                   (org-roam-capture--info (list (cons 'title title)
-                                                 (cons 'ref (format "cite:%s" key))
-                                                 (cons 'slug (org-roam--title-to-slug key))))
-                   (org-roam-capture--context 'ref)
-                   (org-roam-capture-templates org-roam-capture-ref-templates))
-              (org-roam--capture)))))))
+  (let ((in-sub org-roam-refs-directory))
+    (dolist (key keys)
+      (if-let* ((dir (or org-roam-refs-directory
+                         org-roam-directory))
+                (sb-completion (and (f-directory? dir)
+                                    (if in-sub
+                                        (org-roam--get-refs-entry-key-path-completions)
+                                      (org-roam--get-title-path-completions))))
+                (match (assoc key sb-completion))
+                (path (cdr match)))
+          (find-file (cdr match))
+        (when (y-or-n-p (format "No slip-box note was found for %s.  Would you like to create one?" key))
+          (let* ((title key)
+                 (org-roam-capture--info (list (cons 'title title)
+                                               (cons 'ref (format "cite:%s" key))
+                                               (cons 'slug (org-roam--title-to-slug key))))
+                 (org-roam-capture--context 'ref)
+                 (org-roam-capture-templates org-roam-capture-ref-templates))
+            (org-roam--capture)))))))
 
 (defun bibtex-completion-buffer-visiting (file)
   (or (get-file-buffer file)
