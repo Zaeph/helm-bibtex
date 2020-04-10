@@ -1389,8 +1389,10 @@ line."
           (when (y-or-n-p (format "No slip-box note was found for %s.  Would you like to create one?" key))
             (let* ((title key)
                    (org-roam-capture--info (list (cons 'title title)
-                                                 (cons 'slug (org-roam--title-to-slug title))))
-                   (org-roam-capture--context 'capture))
+                                                 (cons 'ref (format "cite:%s" key))
+                                                 (cons 'slug (org-roam--title-to-slug key))))
+                   (org-roam-capture--context 'ref)
+                   (org-roam-capture-templates org-roam-capture-ref-templates))
               (org-roam--capture)))))))
 
 (defun bibtex-completion-buffer-visiting (file)
