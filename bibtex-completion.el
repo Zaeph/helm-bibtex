@@ -178,6 +178,12 @@ should be a single character."
   :group 'bibtex-completion
   :type 'string)
 
+(defcustom bibtex-completion-sb-notes-symbol "S"
+  "Symbol used to indicate that a publication has a slip-box note.
+This should be a single character."
+  :group 'bibtex-completion
+  :type 'string)
+
 (defcustom bibtex-completion-fallback-options
   '(("CrossRef                                  (biblio.el)"
      . (lambda (search-expression) (biblio-lookup #'biblio-crossref-backend search-expression)))
@@ -317,7 +323,7 @@ the directories listed in `bibtex-completion-library-path'."
   :type 'string)
 
 (defcustom bibtex-completion-display-formats
-  '((t . "${author:36} ${title:*} ${year:4} ${=has-pdf=:1}${=has-note=:1} ${=type=:7}"))
+  '((t . "${author:36} ${title:*} ${year:4} ${=has-pdf=:1}${=has-note=:1}${=has-sb-note=:1} ${=type=:7}"))
   "Alist of format strings for displaying entries in the results list.
 The key of each element of this list is either a BibTeX entry
 type (in which case the format string applies to entries of this
@@ -787,7 +793,7 @@ fields. If FIELDS is empty, all fields are kept. Also add a
 DO-NOT-FIND-PDF is non-nil, this function does not attempt to
 find a PDF file."
   (when entry ; entry may be nil, in which case just return nil
-    (let* ((fields (when fields (append fields (list "=type=" "=key=" "=has-pdf=" "=has-note="))))
+    (let* ((fields (when fields (append fields (list "=type=" "=key=" "=has-pdf=" "=has-note=" "=has-sb-note="))))
            ; Check for PDF:
            (entry (if (and (not do-not-find-pdf) (bibtex-completion-find-pdf entry))
                       (cons (cons "=has-pdf=" bibtex-completion-pdf-symbol) entry)
@@ -806,6 +812,12 @@ find a PDF file."
                             (f-file? bibtex-completion-notes-path)
 			    (member entry-key bibtex-completion-cached-notes-keys)))
                       (cons (cons "=has-note=" bibtex-completion-notes-symbol) entry)
+                    entry))
+           ; Check for slip-box notes:
+           (entry (if (and (bound-and-true-p org-roam-directory)
+                           (f-directory? org-roam-directory)
+                           (member entry-key (mapcar #'car (org-roam--get-title-path-completions))))
+                      (cons (cons "=has-sb-note=" bibtex-completion-sb-notes-symbol) entry)
                     entry))
            ; Remove unwanted fields:
            (entry (if fields
@@ -1279,7 +1291,7 @@ defined.  Surrounding curly braces are stripped."
              unless (member name
                             (append (-map (lambda (it) (if (symbolp it) (symbol-name it) it))
                                           bibtex-completion-no-export-fields)
-                             '("=type=" "=key=" "=has-pdf=" "=has-note=" "crossref")))
+                             '("=type=" "=key=" "=has-pdf=" "=has-note=" "=has-sb-note=" "crossref")))
              concat
              (format "  %s = {%s},\n" name value)))))
 
