@@ -1377,6 +1377,22 @@ line."
           (goto-char (point-max))
           (bibtex-completion-notes-mode 1))))))
 
+(defun bibtex-completion-edit-sb-notes (keys)
+  "Open the slip-box notes associated with the selected entries using `find-file'."
+  (dolist (key keys)
+    (if (and org-roam-directory
+             (f-directory? org-roam-directory))
+        (if-let* ((sb-completion (org-roam--get-title-path-completions))
+                  (match (assoc key sb-completion))
+                  (path (cdr match)))
+            (find-file (cdr match))
+          (when (y-or-n-p (format "No slip-box note was found for %s.  Would you like to create one?" key))
+            (let* ((title key)
+                   (org-roam-capture--info (list (cons 'title title)
+                                                 (cons 'slug (org-roam--title-to-slug title))))
+                   (org-roam-capture--context 'capture))
+              (org-roam--capture)))))))
+
 (defun bibtex-completion-buffer-visiting (file)
   (or (get-file-buffer file)
       (find-buffer-visiting file)))
